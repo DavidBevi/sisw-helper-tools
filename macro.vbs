@@ -1,14 +1,27 @@
-Sub Calibration_Header()
+Sub Calibration_UnifyHeaders_CopySerial()
+    ' ••• DAVID BEVI's SHORTCUT •••
+    ' (1) Unify all HEADERS & FOOTERS
+    ' (2) Copy SERIAL-NUMBER from file-name to HEADER & FIRST-PAGE
+    
     Dim doc As Document
     Set doc = ActiveDocument
 
     Dim i As Long
     Dim firstSection As Section
     Set firstSection = doc.Sections(1)
+    
+    ' MACRO OPTIONS: single_undo and pause_screen_updating
+    Application.UndoRecord.StartCustomRecord ("Calibration_Header")
+    Application.ScreenUpdating = False
+    
+    ' Step 1: If there's a section-break in last 2 chars remove it
+    If InStr(ActiveDocument.Range(ActiveDocument.Content.End - 2, ActiveDocument.Content.End).Text, Chr(12)) > 0 Then
+        ActiveDocument.Range(ActiveDocument.Content.End - 2, ActiveDocument.Content.End).Delete
+    End If
 
-    ' Step 1: Unify all headers and footers to the first section headers/footers
-    For i = 2 To doc.Sections.count
-        ' Link headers and footers to the first section
+    ' Step 2: Unify all headers and footers to the first section headers/footers
+    For i = 2 To doc.Sections.Count
+        ' Link headers and footers to the first
         doc.Sections(i).Headers(wdHeaderFooterPrimary).LinkToPrevious = True
         doc.Sections(i).Footers(wdHeaderFooterPrimary).LinkToPrevious = True
         doc.Sections(i).Headers(wdHeaderFooterFirstPage).LinkToPrevious = True
@@ -20,7 +33,7 @@ Sub Calibration_Header()
     ' Refresh headers/footers links
     doc.Fields.Update
 
-    ' Step 2: Get header text of first section primary header
+    ' Step 3: get header text (from first section, since all headers are now linked)
     Dim headerRange As Range
     Set headerRange = firstSection.Headers(wdHeaderFooterPrimary).Range
     Dim headerText As String
@@ -51,7 +64,7 @@ Sub Calibration_Header()
     fourDigits = match.SubMatches(0)
     dashChar = match.SubMatches(1)
 
-    ' Step 3: Extract digits from filename
+    ' Step 4: Extract digits from filename
     Dim filename As String
     filename = doc.Name
 
@@ -71,14 +84,14 @@ Sub Calibration_Header()
         eightDigits = Right(match10.Value, 8)
     Else
         ' Regex for 8 digits
-        Dim regex8 As Object
-        Set regex8 = CreateObject("VBScript.RegExp")
-        With regex8
+        Dim regex8file As Object
+        Set regex8file = CreateObject("VBScript.RegExp")
+        With regex8file
             .Pattern = "\d{8}"
             .Global = False
         End With
-        If regex8.test(filename) Then
-            eightDigits = regex8.Execute(filename)(0).Value
+        If regex8file.test(filename) Then
+            eightDigits = regex8file.Execute(filename)(0).Value
         Else
             MsgBox "Filename does not contain 8 or 10 digit number." & vbCrLf & _
                    "File: " & filename, vbExclamation, "Calibration_Header"
@@ -86,14 +99,28 @@ Sub Calibration_Header()
         End If
     End If
 
-    ' Step 4: Insert the 8 digits after NNNN- in the header, preserving formatting
-
+    ' Step 5: Insert the 8 digits after NNNN- in the header, preserving formatting
     ' Find the position of the pattern NNNN + dash in header range
     Dim pos As Long
     pos = InStr(headerText, fourDigits & dashChar)
     If pos = 0 Then
         MsgBox "Pattern not found in header text after regex match. Unexpected.", vbCritical
         Exit Sub
+    End If
+
+    ' CHECK: do NOT append to NNNN- if the 8 digits are already present
+    Dim nextEight As String
+    nextEight = Mid(headerText, pos + Len(fourDigits & dashChar), 8)
+    Dim rx8 As Object
+    Set rx8 = CreateObject("VBScript.RegExp")
+    With rx8
+        .Pattern = "^\d{8}$"
+        .Global = False
+    End With
+
+    If rx8.test(nextEight) Then
+        ' already has 8 digits after the dash: skip header insertion
+        GoTo SkipHeaderInsertion
     End If
 
     ' Move to position just after the dash to insert the 8 digits
@@ -119,13 +146,8 @@ Sub Calibration_Header()
     insertRange.FormattedText = dashRange.FormattedText
     insertRange.Text = eightDigits
 
-    ' Alternatively, insert text and apply formatting manually:
-    'insertRange.Text = eightDigits
-    'insertRange.Font.Name = dashRange.Font.Name
-    'insertRange.Font.Size = dashRange.Font.Size
-    '... (other font properties if needed)
-    
-    ' Step 5: Insert the 8 digits after "Serial number(s) : " in main document text
+SkipHeaderInsertion:
+    ' Step 6: Insert the 8 digits after "Serial number(s) : " in main document text
     Dim bodyRange As Range
     Set bodyRange = doc.Content
     
@@ -142,155 +164,89 @@ Sub Calibration_Header()
         insertBodyRange.Start = bodyRange.Start + Len(findText)
         insertBodyRange.End = insertBodyRange.Start
     
-        ' Optional: copy formatting from the last character in the matched text
-        Dim formatRange As Range
-        Set formatRange = bodyRange.Duplicate
-        formatRange.Start = insertBodyRange.Start - 1
-        formatRange.End = insertBodyRange.Start
-    
-        insertBodyRange.FormattedText = formatRange.FormattedText
-        insertBodyRange.Text = eightDigits
-End If
+        ' CHECK: do NOT insert if the next 8 characters after the colon are already 8 digits
+        Dim afterPos As Long
+        afterPos = bodyRange.Start + Len(findText)
+        
+        Dim testEndPos As Long
+        testEndPos = afterPos + 8
+        If testEndPos > doc.Content.End Then testEndPos = doc.Content.End
+        
+        Dim testRange As Range
+        Set testRange = doc.Range(Start:=afterPos, End:=testEndPos)
+        
+        Dim testText As String
+        testText = Left(testRange.Text, 8)
+        
+        Dim rx8body As Object
+        Set rx8body = CreateObject("VBScript.RegExp")
+        With rx8body
+            .Pattern = "^\d{8}$"
+            .Global = False
+        End With
+        
+        If Not rx8body.test(testText) Then
+            ' Optional: copy formatting from the last character in the matched text
+            Dim formatRange As Range
+            Set formatRange = bodyRange.Duplicate
+            formatRange.Start = insertBodyRange.Start - 1
+            formatRange.End = insertBodyRange.Start
+        
+            insertBodyRange.FormattedText = formatRange.FormattedText
+            insertBodyRange.Text = eightDigits
+        End If
+    End If
+
+    ' MACRO OPTIONS: closure of pause_screen_updating and single_undo
+    Application.ScreenUpdating = True
+    Application.UndoRecord.EndCustomRecord
     
 End Sub
 
 
-Sub Sections()
-    Dim doc As Document
-    Set doc = ActiveDocument
 
-    Dim para As Paragraph
-    Dim sectionTitles As Collection
-    Set sectionTitles = New Collection
-
-    Dim paraStyles As Collection
-    Set paraStyles = New Collection
-
-    Dim paraIndices As Collection
-    Set paraIndices = New Collection
-
-    Dim paraCounter As Long
-    paraCounter = 0
-
-    ' Collect Heading 1 and Heading 2 paragraphs, save their paragraph indices
-    For Each para In doc.Paragraphs
-        paraCounter = paraCounter + 1
-        If para.Style = "Heading 1" Or para.Style = "Heading 2" Then
-            sectionTitles.Add Trim(para.Range.Text)
-            paraStyles.Add para.Style
-            paraIndices.Add paraCounter ' Manual paragraph index
-        End If
-    Next para
-
-    ' Find the index of "System configuration" (case-insensitive)
-    Dim targetIndex As Long
-    targetIndex = 0
-    Dim i As Long
-    For i = 1 To sectionTitles.count
-        If LCase(sectionTitles(i)) Like "system configuration*" Then
-            targetIndex = i
-            Exit For
-        End If
-    Next i
-
-    If targetIndex = 0 Then
-        MsgBox "'System configuration' section not found.", vbExclamation
-        Exit Sub
-    End If
-
-    ' Prepare message listing all sections/subsections after "System configuration"
-    Dim msg As String
-    msg = "Sections and subsections after 'System configuration':" & vbCrLf & vbCrLf
-
-    Dim tblCount As Long
-    Dim rngSubsection As Range
-    Dim startParaIndex As Long
-    Dim nextHeadingIndex As Long
-
-    For i = targetIndex + 1 To sectionTitles.count
-        If paraStyles(i) = "Heading 2" Then
-            ' Calculate subsection range from current Heading 2 to the next Heading 1 or Heading 2 or document end
-            startParaIndex = paraIndices(i)
-            nextHeadingIndex = doc.Paragraphs.count + 1 ' default: end of doc
-
-            Dim j As Long
-            For j = startParaIndex + 1 To doc.Paragraphs.count
-                If doc.Paragraphs(j).Style = "Heading 1" Or doc.Paragraphs(j).Style = "Heading 2" Then
-                    nextHeadingIndex = j
-                    Exit For
+Sub ColRezise_inSection()
+    Dim sec As Section
+    Dim firstTable As Table
+    Dim tbl As Table
+    Dim totalWidth As Single
+    Dim col1Width As Single
+    Dim col2Width As Single
+    Dim r As Long
+    
+    ' Get section where cursor is
+    Set sec = Selection.Sections(1)
+    If sec.Range.Tables.Count = 0 Then Exit Sub
+    
+    ' Reference to the first table in the section
+    Set firstTable = sec.Range.Tables(1)
+    
+    ' Store overall table width and column widths
+    totalWidth = firstTable.Cell(1, 1).Width
+    col1Width = firstTable.Cell(2, 1).Width
+    col2Width = firstTable.Cell(2, 2).Width
+    
+    ' Start single undo record
+    Application.UndoRecord.StartCustomRecord ("ColRezise_inSection")
+    Application.ScreenUpdating = False
+    
+    ' Apply to all other tables in the section
+    For Each tbl In sec.Range.Tables
+        If Not tbl Is firstTable Then
+            tbl.Cell(1, 1).Width = totalWidth
+            For r = 2 To tbl.Rows.Count
+                If tbl.Rows(r).Cells.Count >= 2 Then
+                    tbl.Rows(r).Cells(1).Width = col1Width
+                    tbl.Rows(r).Cells(2).Width = col2Width
                 End If
-            Next j
-
-            If nextHeadingIndex > doc.Paragraphs.count Then
-                Set rngSubsection = doc.Range(Start:=doc.Paragraphs(startParaIndex).Range.Start, _
-                                             End:=doc.Content.End)
-            Else
-                Set rngSubsection = doc.Range(Start:=doc.Paragraphs(startParaIndex).Range.Start, _
-                                             End:=doc.Paragraphs(nextHeadingIndex).Range.Start - 1)
-            End If
-
-            tblCount = rngSubsection.Tables.count
-
-            msg = msg & (i - targetIndex) & ". " & sectionTitles(i) & " (Tables: " & tblCount & ")" & vbCrLf
-        Else
-            msg = msg & (i - targetIndex) & ". " & sectionTitles(i) & vbCrLf
+            Next r
         End If
-    Next i
-
-    ' Show MsgBox with OK (go to next section) or Cancel (stop)
-    Dim answer As VbMsgBoxResult
-    answer = MsgBox(msg, vbOKCancel + vbInformation, "Sections After System Configuration")
-
-    If answer = vbCancel Then Exit Sub
-
-    ' Target section title to jump to (the first one after System configuration)
-    Dim targetTitle As String
-    targetTitle = sectionTitles(targetIndex + 1)
-
-    ' Find paragraph object for target title and the previous heading paragraph
-    Dim targetPara As Paragraph
-    Dim prevPara As Paragraph
-    Set targetPara = Nothing
-    Set prevPara = Nothing
-
-    For Each para In doc.Paragraphs
-        If (para.Style = "Heading 1" Or para.Style = "Heading 2") Then
-            If Trim(para.Range.Text) = targetTitle Then
-                Set targetPara = para
-                Exit For
-            End If
-        End If
-    Next para
-
-    If targetPara Is Nothing Then
-        MsgBox "Next section heading not found.", vbExclamation
-        Exit Sub
-    End If
-
-    ' Find previous heading paragraph (Heading 1 or Heading 2) before targetPara
-    Dim prevParaCandidate As Paragraph
-    For Each para In doc.Paragraphs
-        If (para.Style = "Heading 1" Or para.Style = "Heading 2") Then
-            If para.Range.Start < targetPara.Range.Start Then
-                Set prevParaCandidate = para
-            Else
-                Exit For
-            End If
-        End If
-    Next para
-    Set prevPara = prevParaCandidate
-
-    ' Scroll workaround:
-    If Not prevPara Is Nothing Then
-        prevPara.Range.Select
-        ActiveWindow.ScrollIntoView Selection.Range, True ' Scroll previous heading to top
-    Else
-        targetPara.Range.Select
-        ActiveWindow.ScrollIntoView Selection.Range, True ' Scroll target heading to top if no previous heading
-    End If
-
-    ' Now select target heading and scroll so it is visible (stabilize)
-    targetPara.Range.Select
-    ActiveWindow.ScrollIntoView targetPara.Range, False
-
+    Next tbl
+        
+    ' End single undo record
+    Application.ScreenUpdating = True
+    Application.UndoRecord.EndCustomRecord
+    
 End Sub
+
+
