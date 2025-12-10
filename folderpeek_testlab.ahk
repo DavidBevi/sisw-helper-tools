@@ -4,20 +4,21 @@
 ; ██     ██   ██ ██     ██  ██ ██     ██  ██ ██     ██     ██     ██ ██      ██  ██       ██   ██         ██   ██   ██     ██  ██ ██  ██ 
 ; ██      █████  ██████ █████  ██████ ██  ██ ██     ██████ ██████ ██  ██                  ██   ██████ █████    ██   ██████ ██  ██ █████  
                                                                                                                                                
-;2025-12-10: this script now contains many different utilities, organized in subsections inside logical sections (settings, hotkeys, funcs...)
-;            they should be independent, but I'm not sure
+;2025-12-10: this script contains many different utilities, organized in subsections inside logical sections (settings, hotkeys, funcs...)
+;            utilities should be independent, but I'm not sure
 
-;FOLDERPEEK: periodically checks if the mouse cursor is over a file explorer window, if so it displays the content of the folder under the cursor
-;            txt files are also displayed, unless they are a diag report, in which case only the table with frame and modules SN is displayed
-;            if 7-Zip is installed it also displays the content of 7z files
+;FOLDERPEEK: constantly checks if the mouse cursor is over a file explorer window, if so it displays the content of the folder under the cursor
+;            txt files are also displayed, unless they are a diag report, in which case only a chosen section with relevant info is displayed
+;            if 7-Zip is installed it also displays the files inside 7z compressed folders
 
 ;CALLAUNCHER: a little window in the bottom right corner with buttons to open calibration programs and reports
-;             the window should auto-open when a new ethernet device (a system) is detected (buggy)
+;             the window should auto-open when a new ethernet device (a scadas) is detected (a bit buggy)
 ;             manually open with F3, manually close with ESC
 
-;HELPERGUIS: 3 little transparent boxes with orange text will appear over Adjustment+Calibration when it's open and focused
-;            if you drag them over the NEXT and PREV buttons you'll be able to use the keyboard to click said buttons
-;            it's a hack because of how Adj+Cal is made, but it's nice and it should be robust
+;HELPERGUIS: this makes 3 little transparent windows with an orange corner, they will appear over Adjustment+Calibration when it's open and focused
+;            if you drag the 2 boxes that also have a key name over the NEXT and PREV buttons you'll be able to use said keys to click the buttons
+;            the 3rd box with only the orange corner is where the mouse clicks after clicking NEXT or PREV
+;            (it's a hack because of how Adj+Cal is made, but it's very convenient, and it should be robust)
 
 ;SYSTEMSDB: a database of every TAC/Order, used to show the systems details in a small gui when you copy a serial number in microsoft word
 ;           systems have to be imported manually by copying the tables from emails from Sabrina, then clicking on tray icon → Systems DB tools
